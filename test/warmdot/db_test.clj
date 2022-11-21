@@ -8,9 +8,12 @@
             [cljc.java-time.offset-time :as offset-time]
             [tick.core :as t]))
 
-(defn connect-to-database
-  [f]
-  (db/with-connection (postgres/connection {:dbname "db_test"})
+(def db1 (postgres/connection {:dbname "db_test"}))
+(def db2 (postgres/connection {:dbname "db_test2"}))
+
+(defn create-schema
+  [db]
+  (db/with-db db
     (db/execute! "DROP TABLE IF EXISTS fixtures")
     (db/execute! "DROP TYPE IF EXISTS compass")
     (db/execute! "CREATE TYPE compass AS ENUM ('north', 'south', 'east', 'west')")
@@ -36,7 +39,13 @@
         smallint_array smallint[],
         integer_array integer[],
         bigint_array bigint[]
-      )")
+      )")))
+
+(defn connect-to-database
+  [f]
+  (create-schema db1)
+  (create-schema db2)
+  (db/with-db (postgres/connection {:dbname "db_test"})
     (f)))
 
 (use-fixtures :once connect-to-database)
@@ -66,6 +75,7 @@
   [fixture-1 fixture-2])
 
 (deftest queries-test
+  (db/set-db! db1)
   (db/delete! :fixtures)
 
   (testing "insert!"
@@ -125,6 +135,7 @@
     (is (not (db/exists? :fixtures :where [:= 1 :id])))))
 
 (deftest queries-via-namespace-test
+  (db/set-db! db1)
   (fixtures/delete!)
 
   (testing "insert!"
@@ -183,6 +194,8 @@
     (is (not (fixtures/exists? :where [:= 1 :id])))))
 
 (deftest types-test
+  (db/set-db! db1)
+  (db/delete! :fixtures)
   (let [id (db/insert! :fixtures)
         row (dataset/->Row :fixtures id)]
 
@@ -278,6 +291,7 @@
       (is (= [6 7 8 9 0] (db/pluck-first! row :bigint_array))))))
 
 (deftest transactions-test
+  (db/set-db! db1)
   (db/delete! :fixtures)
   (db/insert! :fixtures :values [fixture-1])
   (db/insert! :fixtures :values [fixture-2])
@@ -296,10 +310,37 @@
         (throw (ex-info "Error!" {})))
       (catch Exception _))
     (is (= ["JKL" "QRS"] (db/pluck-first! :fixtures [:text :varchar]))))
-  
+
   (testing "explicit rollback"
     (db/with-transaction
       (db/update! :fixtures :set {:text "NO"})
       (db/rollback!)
       (db/update! :fixtures :set {:varchar "YES"}))
     (is (= ["JKL" "YES"] (db/pluck-first! :fixtures [:text :varchar])))))
+
+(deftest set-db!-test
+  (db/delete! :fixtures ::db/db db1)
+  (db/delete! :fixtures ::db/db db2)
+
+  (db/with-db db1 (db/insert! :fixtures))
+
+  (testing "::db option"
+    (is (= 1 (db/row-count :fixtures ::db/db db1)))
+    (is (= 0 (db/row-count :fixtures ::db/db db2))))
+  
+  (testing "with-db"
+    (db/with-db db1 (is (= 1 (db/row-count :fixtures))))
+    (db/with-db db2 (is (= 0 (db/row-count :fixtures))))
+    
+    (testing "nested calls"
+      (db/with-db db1 
+        (is (= 1 (db/row-count :fixtures)))
+        (db/with-db db2 
+          (is (= 0 (db/row-count :fixtures))))
+        (is (= 1 (db/row-count :fixtures))))))
+  
+  (testing "set-db!"
+    (db/set-db! db1)
+    (is (= 1 (db/row-count :fixtures)))
+    (db/set-db! db2)
+    (is (= 1 (db/row-count :fixtures)))))

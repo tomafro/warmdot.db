@@ -4,20 +4,20 @@
             [next.jdbc :as jdbc]
             [warmdot.db.dataset :as dataset]))
 
-(def ^:dynamic *current-connection* nil)
+(def ^:dynamic *current-db* nil)
 
-(defmacro with-connection
-  [connection & body]
-  `(with-bindings {#'*current-connection* ~connection}
+(defmacro with-db
+  [db & body]
+  `(with-bindings {#'*current-db* ~db}
      ~@body))
 
-(defn set-connection
-  [connection]
-  (alter-var-root #'*current-connection* (constantly connection)))
+(defn set-db!
+  [db]
+  (alter-var-root #'*current-db* (constantly db)))
 
-(defn- throw-no-connection
+(defn- throw-no-db
   []
-  (throw (ex-info "No connection found; either set a global connection with `set-connection`, a temporary connection with `with-connection`, or pass in a :warmdot.db/connection as an option"
+  (throw (ex-info "No connection found; either set a global connection with `set-db!`, a temporary connection with `with-db`, or pass in :warmdot.db/db as an option"
                   {:type ::connection-missing})))
 
 (defn- throw-record-not-found
@@ -30,40 +30,43 @@
   (fn [dataset & args] (or (apply f dataset args)
                            (throw-record-not-found dataset args))))
 
-(defn find-connection!
-  ([] (find-connection! nil))
+(defn find-db!
+  ([] (find-db! nil))
   ([query]
-   (or (and (map? query) (get query ::connection))
-       *current-connection*
-       (throw-no-connection))))
+   (or (and (map? query) (get query ::db))
+       *current-db*
+       (throw-no-db))))
 
 (defn- execute-query!
-  [f connection query]
-  (try
-    (prn (if (string? query) [query] (sql/format query {:inline true})))
-    (let [query (if (string? query) [query] (sql/format query))]
-      (f connection query))
-    (catch org.postgresql.util.PSQLException e
-      (throw (ex-info (str "Query failed: " (.getMessage e)) {:query (if (string? query) [query] (sql/format query {:inline true}))} e)))))
+  [f query]
+  (let [connection (find-db! query)
+        query (if (map? query) (dissoc query ::db) query)
+        formatted-query (if (string? query)
+                          [query]
+                          (sql/format query))]
+    (try
+      (f connection formatted-query)
+      (catch org.postgresql.util.PSQLException e
+        (throw (ex-info (str "Query failed: " (.getMessage e)) {:query (if (string? query) [query] (sql/format query {:inline true}))} e))))))
 
 (defmacro with-transaction
   [& body]
-  `(jdbc/transact (find-connection!)
-     (^{:once true} fn* [database#]
-                        (with-connection database#
-                          ~@body))))
+  `(jdbc/transact (find-db!)
+                  (^{:once true} fn* [database#]
+                                     (with-db database#
+                                       ~@body))))
 
 (defn rollback!
   []
-  (.rollback (find-connection!)))
+  (.rollback (find-db!)))
 
 (defn execute!
   [query]
-  (execute-query! jdbc/execute! (find-connection! query) query))
+  (execute-query! jdbc/execute! query))
 
 (defn execute-one!
   [query]
-  (execute-query! jdbc/execute-one! (find-connection! query) query))
+  (execute-query! jdbc/execute-one! query))
 
 (defn- insert-update-or-delete!
   [query]
