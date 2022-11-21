@@ -15,6 +15,10 @@
   (update [this {:as options}])
   (delete [this {:as options}]))
 
+(defn select-one
+  [dataset {:as options}]
+  (select dataset (assoc options :limit 1)))
+
 (defn dataset?
   [x]
   (satisfies? Dataset x))
@@ -26,18 +30,19 @@
     (merge-queries {:select [:*] :from [table]} options))
 
   (insert
-    [table values]
-    {:insert-into table
-     :returning [:id]
-     :values (if (seq values) values :default)})
+    [table {:as options}]
+    (merge-queries {:insert-into table
+                    :values :default
+                    :returning [:id]}
+                   options))
 
   (update
     [table {:as options}]
     (merge-queries {:update table} options))
 
   (delete
-   [table {:as options}]
-   (merge-queries {:delete-from table} options))
+    [table {:as options}]
+    (merge-queries {:delete-from table} options))
 
   clojure.lang.APersistentMap
   (select
@@ -54,8 +59,8 @@
 (defrecord Row [table id]
   Dataset
   (select
-   [_row {:as options}]
-   (row-query table id select options))
+    [_row {:as options}]
+    (row-query table id select options))
 
   (update
     [_row {:as options}]
@@ -64,10 +69,6 @@
   (delete
     [_row {:as options}]
     (row-query table id delete options)))
-
-(defn select-one
-  [dataset {:as options}]
-  (select dataset (assoc options :limit 1)))
 
 (defn by
   [& {:as conditions}]

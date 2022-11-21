@@ -67,13 +67,12 @@
 
 (deftest queries-test
   (db/delete! :fixtures)
-
+  
   (testing "insert!"
-    (is (= 1 (db/insert! :fixtures fixture-1)))
-    (is (= 2 (db/insert! :fixtures fixture-2))))
+    (is (= 1 (db/insert! :fixtures :values [fixture-1])))
+    (is (= 2 (db/insert! :fixtures :values [fixture-2]))))
 
   (testing "find-all"
-    (is (= fixtures (map #(select-keys % [:id :text]) (db/find-all :fixtures))))
     (is (= [] (db/find-all :fixtures :where [:= true false]))))
 
   (testing "find-first"
@@ -129,8 +128,8 @@
   (fixtures/delete!)
 
   (testing "insert!"
-    (is (= 1 (fixtures/insert! fixture-1)))
-    (is (= 2 (fixtures/insert! fixture-2))))
+    (is (= 1 (fixtures/insert! :values [fixture-1])))
+    (is (= 2 (fixtures/insert! :values [fixture-2]))))
 
   (testing "find-all"
     (is (= fixtures (map #(select-keys % [:id :text]) (fixtures/find-all))))

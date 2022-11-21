@@ -43,6 +43,10 @@
   [query]
   (connection/execute-one! (find-connection! query) query))
 
+(defn- insert-update-or-delete!
+  [query]
+  (last (first (execute-one! query))))
+
 (defn find-all
   [dataset & {:as options}]
   (execute! (dataset/select dataset options)))
@@ -77,21 +81,20 @@
     (throw-record-not-found dataset columns options)))
 
 (defn insert!
-  ([dataset] (insert! dataset nil))
-  ([dataset values]
-   (last (first (execute-one! (dataset/insert dataset (when values [values])))))))
+  [dataset & {:as options}]
+  (insert-update-or-delete! (dataset/insert dataset options)))
 
 (defn update!
   [dataset & {:as options}]
-  (last (first (execute-one! (dataset/update dataset options)))))
+  (insert-update-or-delete! (dataset/update dataset options)))
 
 (defn delete!
   [dataset & {:as options}]
-  (last (first (execute-one! (dataset/delete dataset options)))))
+  (insert-update-or-delete! (dataset/delete dataset options)))
 
 (defn exists?
   [dataset & {:as options}]
-  (boolean (first (execute! {:select [true] :where [:exists (dataset/select dataset options)]}))))
+  (boolean (seq (execute-one! {:select [true] :where [:exists (dataset/select dataset options)]}))))
 
 (defn row-count
   [dataset & {:as options}]
