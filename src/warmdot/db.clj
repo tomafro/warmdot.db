@@ -97,22 +97,22 @@
   [dataset & {:as options}]
   (pluck-first dataset :%count.* options))
 
-(defn define-dataset-function
+(defn- dataset-function-def
   [dataset function]
   `(def ~(-> function name symbol) (partial ~function ~dataset)))
 
 (defmacro define-dataset-functions
   [dataset]
-  `(do ~@(map #(define-dataset-function dataset %) [`find-all
-                                                    `find-first
-                                                    `find-first!
-                                                    `by-id
-                                                    `by-id!
-                                                    `pluck-all
-                                                    `pluck-first
-                                                    `pluck-first!
-                                                    `insert!
-                                                    `update!
-                                                    `delete!
-                                                    `exists?
-                                                    `row-count])))
+  `(do ~@(map #(dataset-function-def dataset %) [`find-all
+                                                 `find-first
+                                                 `find-first!
+                                                 `by-id
+                                                 `by-id!
+                                                 `pluck-all
+                                                 `pluck-first
+                                                 `pluck-first!
+                                                 `insert!
+                                                 `update!
+                                                 `delete!
+                                                 `exists?
+                                                 `row-count])))
