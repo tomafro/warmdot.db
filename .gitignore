@@ -3,3 +3,4 @@
 /.cpcache
 /.calva
 /.lsp/.cache
+/*.patch
