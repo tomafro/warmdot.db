@@ -1,0 +1,9 @@
+{:kaocha/color? true
+ :kaocha/fail-fast? false
+ :kaocha.plugin.randomize/randomize? false
+ :kaocha/reporter [kaocha.report/documentation]
+ :kaocha/tests [{:kaocha.testable/type :kaocha.type/clojure.test
+                 :kaocha.testable/id   :main
+                 :kaocha/ns-patterns   ["-test$"]
+                 :kaocha/source-paths  ["src"]
+                 :kaocha/test-paths    ["test"]}]}
