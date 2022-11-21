@@ -1,5 +1,4 @@
 (ns warmdot.db-test
-  (:refer-clojure :exclude [count])
   (:require [clojure.test :refer :all]
             [warmdot.db :as db]
             [warmdot.db.postgres :as postgres]
@@ -74,13 +73,31 @@
 (def fixtures
   [fixture-1 fixture-2])
 
-(deftest queries-test
+(deftest insert-test
   (db/set-db! db1)
   (db/delete! :fixtures)
 
   (testing "insert!"
-    (is (= 1 (db/insert! :fixtures :values [fixture-1])))
-    (is (= 2 (db/insert! :fixtures :values [fixture-2]))))
+    (let [result (db/insert! :fixtures :values [fixture-1])]
+      (is (= 1 (count result)))
+      (is (submap? fixture-1 (first result))))
+    (let [result (db/insert! :fixtures :values [fixture-2])]
+      (is (= 1 (count result)))
+      (is (submap? fixture-2 (first result)))))
+
+  (testing "insert! (via namespace)"
+    (db/delete! :fixtures)
+    (let [result (fixtures/insert! :values [fixture-1])]
+      (is (= 1 (count result)))
+      (is (submap? fixture-1 (first result))))
+    (let [result (fixtures/insert! :values [fixture-2])]
+      (is (= 1 (count result)))
+      (is (submap? fixture-2 (first result))))))
+
+(deftest queries-test
+  (db/set-db! db1)
+  (db/delete! :fixtures)
+  (db/insert! :fixtures :values [fixture-1 fixture-2])
 
   (testing "find-all"
     (is (= [] (db/find-all :fixtures :where [:= true false]))))
@@ -137,10 +154,7 @@
 (deftest queries-via-namespace-test
   (db/set-db! db1)
   (fixtures/delete!)
-
-  (testing "insert!"
-    (is (= 1 (fixtures/insert! :values [fixture-1])))
-    (is (= 2 (fixtures/insert! :values [fixture-2]))))
+  (fixtures/insert! :values [fixture-1 fixture-2])
 
   (testing "find-all"
     (is (= fixtures (map #(select-keys % [:id :text]) (fixtures/find-all))))
@@ -196,7 +210,7 @@
 (deftest types-test
   (db/set-db! db1)
   (db/delete! :fixtures)
-  (let [id (db/insert! :fixtures)
+  (let [id (-> (db/insert! :fixtures) first :id)
         row (dataset/->Row :fixtures id)]
 
     (testing "text"

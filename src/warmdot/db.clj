@@ -1,5 +1,4 @@
 (ns warmdot.db
-  (:refer-clojure :exclude [count])
   (:require [honey.sql :as sql]
             [next.jdbc :as jdbc]
             [warmdot.db.dataset :as dataset]))
@@ -107,7 +106,7 @@
 
 (defn insert!
   [dataset & {:as options}]
-  (insert-update-or-delete! (dataset/insert dataset options)))
+  (execute! (dataset/insert dataset options)))
 
 (defn update!
   [dataset & {:as options}]

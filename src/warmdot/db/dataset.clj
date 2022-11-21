@@ -33,7 +33,7 @@
     [table {:as options}]
     (merge-queries {:insert-into table
                     :values :default
-                    :returning [:id]}
+                    :returning [:*]}
                    options))
 
   (update
