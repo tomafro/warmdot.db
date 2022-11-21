@@ -30,11 +30,12 @@
   (fn [dataset & args] (or (apply f dataset args)
                            (throw-record-not-found dataset args))))
 
-(defn- find-connection!
-  [query]
-  (or (and (map? query) (get query ::connection))
-      *current-connection*
-      (throw-no-connection)))
+(defn find-connection!
+  ([] (find-connection! nil))
+  ([query]
+   (or (and (map? query) (get query ::connection))
+       *current-connection*
+       (throw-no-connection))))
 
 (defn- execute-query!
   [f connection query]
@@ -44,6 +45,17 @@
       (f connection query))
     (catch org.postgresql.util.PSQLException e
       (throw (ex-info (str "Query failed: " (.getMessage e)) {:query (if (string? query) [query] (sql/format query {:inline true}))} e)))))
+
+(defmacro with-transaction
+  [& body]
+  `(jdbc/transact (find-connection!)
+     (^{:once true} fn* [database#]
+                        (with-connection database#
+                          ~@body))))
+
+(defn rollback!
+  []
+  (.rollback (find-connection!)))
 
 (defn execute!
   [query]

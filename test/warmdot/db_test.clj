@@ -67,7 +67,7 @@
 
 (deftest queries-test
   (db/delete! :fixtures)
-  
+
   (testing "insert!"
     (is (= 1 (db/insert! :fixtures :values [fixture-1])))
     (is (= 2 (db/insert! :fixtures :values [fixture-2]))))
@@ -175,8 +175,8 @@
   (testing "update!"
     (is (= 1 (fixtures/update! :set {:text "HIJ"} :where [:= 1 :id])))
     (is (fixtures/exists? :where [:and
-                                      [:= 1 :id]
-                                      [:= "HIJ" :text]])))
+                                  [:= 1 :id]
+                                  [:= "HIJ" :text]])))
 
   (testing "delete!"
     (is (= 1 (fixtures/delete! :where [:= 1 :id])))
@@ -276,3 +276,30 @@
       (is (= [1 2 3 4 5] (db/pluck-first! row :bigint_array)))
       (db/update! row :set {:bigint_array [:lift [6 7 8 9 0]]})
       (is (= [6 7 8 9 0] (db/pluck-first! row :bigint_array))))))
+
+(deftest transactions-test
+  (db/delete! :fixtures)
+  (db/insert! :fixtures :values [fixture-1])
+  (db/insert! :fixtures :values [fixture-2])
+
+  (testing "commit on completion"
+    (db/with-transaction
+      (db/update! :fixtures :set {:text "JKL"})
+      (db/update! :fixtures :set {:varchar "QRS"}))
+    (is (= ["JKL" "QRS"] (db/pluck-first! :fixtures [:text :varchar]))))
+
+  (testing "rollback on error"
+    (try
+      (db/with-transaction
+        (db/update! :fixtures :set {:text "MNO"})
+        (db/update! :fixtures :set {:varchar "XYZ"})
+        (throw (ex-info "Error!" {})))
+      (catch Exception _))
+    (is (= ["JKL" "QRS"] (db/pluck-first! :fixtures [:text :varchar]))))
+  
+  (testing "explicit rollback"
+    (db/with-transaction
+      (db/update! :fixtures :set {:text "NO"})
+      (db/rollback!)
+      (db/update! :fixtures :set {:varchar "YES"}))
+    (is (= ["JKL" "YES"] (db/pluck-first! :fixtures [:text :varchar])))))
