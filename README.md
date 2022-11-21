@@ -36,19 +36,19 @@ result indicates that something has gone wrong.
 ```
 
 None of the examples so far directly take a database connection. Instead, the
-connection can be specified in several ways. Using `set-connection`,
-`with-connection`, or the namespaced `:warmdot.db/connection` option directly
+connection can be specified in several ways. Using `set-db!`,
+`with-db`, or the namespaced `:warmdot.db/db` option directly
 in a query.
 
 These are all roughly equivalent:
 
 ```clojure
-(find-first :users :warmdot.db/connection database)
+(find-first :users :warmdot.db/db database)
 
-(with-connection database
+(with-db database
   (find-first :users))
 
-(set-connection database)
+(set-db! database)
 (find-first :users)
 ```
 
