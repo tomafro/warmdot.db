@@ -1,6 +1,7 @@
 (ns warmdot.db
   (:refer-clojure :exclude [count])
-  (:require [warmdot.db.connection :as connection]
+  (:require [honey.sql :as sql]
+            [next.jdbc :as jdbc]
             [warmdot.db.dataset :as dataset]))
 
 (def ^:dynamic *current-connection* nil)
@@ -35,13 +36,22 @@
       *current-connection*
       (throw-no-connection)))
 
+(defn- execute-query!
+  [f connection query]
+  (try
+    (prn (if (string? query) [query] (sql/format query {:inline true})))
+    (let [query (if (string? query) [query] (sql/format query))]
+      (f connection query))
+    (catch org.postgresql.util.PSQLException e
+      (throw (ex-info (str "Query failed: " (.getMessage e)) {:query (if (string? query) [query] (sql/format query {:inline true}))} e)))))
+
 (defn execute!
   [query]
-  (connection/execute! (find-connection! query) query))
+  (execute-query! jdbc/execute! (find-connection! query) query))
 
 (defn execute-one!
   [query]
-  (connection/execute-one! (find-connection! query) query))
+  (execute-query! jdbc/execute-one! (find-connection! query) query))
 
 (defn- insert-update-or-delete!
   [query]

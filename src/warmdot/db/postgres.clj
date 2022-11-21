@@ -1,10 +1,9 @@
-(ns warmdot.db.connection.postgres
-  (:require [jsonista.core :as json] [honey.sql :as sql]
+(ns warmdot.db.postgres
+  (:require [jsonista.core :as json]
             [next.jdbc :as jdbc]
             [next.jdbc.prepare :as prepare]
             [next.jdbc.result-set :as result-set]
-            [next.jdbc.date-time]
-            [warmdot.db.connection :refer [Connection]])
+            [next.jdbc.date-time])
   (:import (java.sql ResultSet ResultSetMetaData PreparedStatement Array)
            (org.postgresql.util PGobject)))
 
@@ -66,26 +65,9 @@
   (read-column-by-label [^Array v _]    (vec (.getArray v)))
   (read-column-by-index [^Array v _ _]  (vec (.getArray v))))
 
-(defn- perform!
-  [f datasource query]
-  (try
-    (prn (if (string? query) [query] (sql/format query {:inline true})))
-    (let [query (if (string? query) [query] (sql/format query))]
-      (f datasource query))
-    (catch org.postgresql.util.PSQLException e
-      (throw (ex-info (str "Query failed: " (.getMessage e)) {:query (if (string? query) [query] (sql/format query {:inline true}))} e)))))
-
 (defn connection
   [db]
-  (let [datasource (-> (jdbc/get-datasource (assoc db :dbtype "postgres" :stringtype "unspecified"))
-                       (jdbc/with-options {:builder-fn (result-set/as-maps-adapter
-                                                        result-set/as-unqualified-lower-maps
-                                                        column-reader)}))]
-    (reify Connection
-      (execute!
-        [_ query]
-        (perform! jdbc/execute! datasource query))
-
-      (execute-one!
-        [_ query]
-        (perform! jdbc/execute-one! datasource query)))))
+  (-> (jdbc/get-datasource (assoc db :dbtype "postgres" :stringtype "unspecified"))
+      (jdbc/with-options {:builder-fn (result-set/as-maps-adapter
+                                       result-set/as-unqualified-lower-maps
+                                       column-reader)})))

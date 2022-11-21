@@ -2,7 +2,7 @@
   (:refer-clojure :exclude [count])
   (:require [clojure.test :refer :all]
             [warmdot.db :as db]
-            [warmdot.db.connection.postgres :as postgres]
+            [warmdot.db.postgres :as postgres]
             [warmdot.db.dataset :as dataset]
             [warmdot.db.test.fixtures :as fixtures]
             [cljc.java-time.offset-time :as offset-time]
@@ -169,8 +169,8 @@
     (is (not (fixtures/exists? :where [:= true false]))))
 
   (testing "count"
-    (is (= 2 (fixtures/count)))
-    (is (= 1 (fixtures/count :where [:= 1 :id]))))
+    (is (= 2 (fixtures/row-count)))
+    (is (= 1 (fixtures/row-count :where [:= 1 :id]))))
 
   (testing "update!"
     (is (= 1 (fixtures/update! :set {:text "HIJ"} :where [:= 1 :id])))
