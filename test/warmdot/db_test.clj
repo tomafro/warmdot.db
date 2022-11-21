@@ -112,8 +112,8 @@
     (is (not (db/exists? :fixtures :where [:= true false]))))
 
   (testing "count"
-    (is (= 2 (db/count :fixtures)))
-    (is (= 1 (db/count :fixtures :where [:= 1 :id]))))
+    (is (= 2 (db/row-count :fixtures)))
+    (is (= 1 (db/row-count :fixtures :where [:= 1 :id]))))
 
   (testing "update!"
     (is (= 1 (db/update! :fixtures :set {:text "HIJ"} :where [:= 1 :id])))

@@ -93,7 +93,7 @@
   [dataset & {:as options}]
   (boolean (first (execute! {:select [true] :where [:exists (dataset/select dataset options)]}))))
 
-(defn count
+(defn row-count
   [dataset & {:as options}]
   (pluck-first dataset :%count.* options))
 
@@ -115,4 +115,4 @@
                                                     `update!
                                                     `delete!
                                                     `exists?
-                                                    `count])))
+                                                    `row-count])))
