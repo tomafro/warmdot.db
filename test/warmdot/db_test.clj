@@ -35,6 +35,7 @@
         enum compass,
         json JSON,
         jsonb JSONB,
+        uuid UUID,
         smallint_array smallint[],
         integer_array integer[],
         bigint_array bigint[]
@@ -292,6 +293,18 @@
       (is (= 9223372036854775807 (db/pluck-first! row :bigint)))
       (db/update! row :set {:bigint -9223372036854775808})
       (is (= -9223372036854775808 (db/pluck-first! row :bigint))))
+    
+    (testing "real"
+      (db/update! row :set {:real Float/MAX_VALUE})
+      (is (= Float/MAX_VALUE (db/pluck-first! row :real)))
+      (db/update! row :set {:real Float/MIN_VALUE})
+      (is (= Float/MIN_VALUE (db/pluck-first! row :real))))
+    
+    (testing "double"
+      (db/update! row :set {:double Double/MAX_VALUE})
+      (is (= Double/MAX_VALUE (db/pluck-first! row :double)))
+      (db/update! row :set {:double Double/MIN_VALUE})
+      (is (= Double/MIN_VALUE (db/pluck-first! row :double))))
 
     (testing "date"
       (let [date (t/date)]
@@ -334,6 +347,12 @@
       (db/update! row :set {:json [:lift ["vector" 1]]})
       (is (= ["vector" 1] (db/pluck-first! row :json))))
 
+    (testing "uuid"
+      (db/update! row :set {:uuid (parse-uuid "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11")})
+      (is (= (parse-uuid "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11") (db/pluck-first! row :uuid)))
+      (db/update! row :set {:uuid "f81d4fae-7dec-11d0-a765-00a0c91e6bf6"})
+      (is (= "f81d4fae-7dec-11d0-a765-00a0c91e6bf6" (str (db/pluck-first! row :uuid)))))
+    
     (testing "smallint[]"
       (db/update! row :set {:smallint_array (into-array Long [1 2 3 4 5])})
       (is (= [1 2 3 4 5] (db/pluck-first! row :smallint_array)))
