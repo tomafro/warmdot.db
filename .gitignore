@@ -5,3 +5,4 @@
 /.lsp/.cache
 /*.patch
 /.rebel_readline_history
+/src/user.clj
