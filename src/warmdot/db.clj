@@ -67,9 +67,10 @@
   [query]
   (execute-query! jdbc/execute-one! query))
 
-(defn- insert-update-or-delete!
-  [query]
-  (last (first (execute-one! query))))
+(defn- update-count-or-result
+  [result]
+  (or (-> result first ::jdbc/update-count)
+      result))
 
 (defn find-all
   [dataset & {:as options}]
@@ -106,15 +107,15 @@
 
 (defn insert!
   [dataset & {:as options}]
-  (execute! (dataset/insert dataset options)))
+  (update-count-or-result (execute! (dataset/insert dataset options))))
 
 (defn update!
   [dataset & {:as options}]
-  (insert-update-or-delete! (dataset/update dataset options)))
+  (update-count-or-result (execute! (dataset/update dataset options))))
 
 (defn delete!
   [dataset & {:as options}]
-  (insert-update-or-delete! (dataset/delete dataset options)))
+  (update-count-or-result (execute! (dataset/delete dataset options))))
 
 (defn exists?
   [dataset & {:as options}]

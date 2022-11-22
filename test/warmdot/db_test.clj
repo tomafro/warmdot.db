@@ -77,22 +77,24 @@
   (db/set-db! db1)
   (db/delete! :fixtures)
 
-  (testing "insert!"
-    (let [result (db/insert! :fixtures :values [fixture-1])]
-      (is (= 1 (count result)))
-      (is (submap? fixture-1 (first result))))
-    (let [result (db/insert! :fixtures :values [fixture-2])]
-      (is (= 1 (count result)))
-      (is (submap? fixture-2 (first result)))))
+  (testing "returning inserted row count"
+    (is (= 1 (db/insert! :fixtures)))
+    (is (= 1 (db/insert! :fixtures :values [{:text "A"}])))
+    (is (= 2 (db/insert! :fixtures :values [{:text "B"} {:text "C"}]))))
+  
+  (testing "returning inserted rows"
+    (is (int? (-> (db/insert! :fixtures :returning [:id]) first :id)))
+    (is (= [{:text "A"}]
+           (db/insert! :fixtures :values [{:text "A"}] :returning [:text])))
+    (is (= [{:text "B"} {:text "C"}]
+           (db/insert! :fixtures :values [{:text "B"} {:text "C"}] :returning [:text]))))
 
-  (testing "insert! (via namespace)"
+  (testing "inserting via namespace"
     (db/delete! :fixtures)
-    (let [result (fixtures/insert! :values [fixture-1])]
-      (is (= 1 (count result)))
-      (is (submap? fixture-1 (first result))))
-    (let [result (fixtures/insert! :values [fixture-2])]
-      (is (= 1 (count result)))
-      (is (submap? fixture-2 (first result))))))
+    (is (= 1 (fixtures/insert! :values [{:text "A"}])))
+    (is (= 2 (fixtures/insert! :values [{:text "B"} {:text "C"}])))
+    (is (= [{:text "D"} {:text "E"}]
+           (db/insert! :fixtures :values [{:text "D"} {:text "E"}] :returning [:text])))))
 
 (deftest queries-test
   (db/set-db! db1)
@@ -210,7 +212,7 @@
 (deftest types-test
   (db/set-db! db1)
   (db/delete! :fixtures)
-  (let [id (-> (db/insert! :fixtures) first :id)
+  (let [id (-> (db/insert! :fixtures :returning [:id]) first :id)
         row (dataset/->Row :fixtures id)]
 
     (testing "text"
