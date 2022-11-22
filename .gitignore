@@ -4,3 +4,4 @@
 /.calva
 /.lsp/.cache
 /*.patch
+/.rebel_readline_history
