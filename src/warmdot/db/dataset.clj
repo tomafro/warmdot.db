@@ -37,7 +37,7 @@
 
   (update
     [table {:as options}]
-    (merge-queries {:update table} options))
+    (merge-queries {:update table :set {:id :id}} options))
 
   (delete
     [table {:as options}]

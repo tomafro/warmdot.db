@@ -77,24 +77,50 @@
   (db/set-db! db1)
   (db/delete! :fixtures)
 
-  (testing "returning inserted row count"
+  (testing "returning row count"
     (is (= 1 (db/insert! :fixtures)))
     (is (= 1 (db/insert! :fixtures :values [{:text "A"}])))
     (is (= 2 (db/insert! :fixtures :values [{:text "B"} {:text "C"}]))))
   
-  (testing "returning inserted rows"
+  (testing "returning rows (when :returning clause included)"
     (is (int? (-> (db/insert! :fixtures :returning [:id]) first :id)))
     (is (= [{:text "A"}]
            (db/insert! :fixtures :values [{:text "A"}] :returning [:text])))
     (is (= [{:text "B"} {:text "C"}]
            (db/insert! :fixtures :values [{:text "B"} {:text "C"}] :returning [:text]))))
 
-  (testing "inserting via namespace"
+  (testing "via namespace"
     (db/delete! :fixtures)
     (is (= 1 (fixtures/insert! :values [{:text "A"}])))
     (is (= 2 (fixtures/insert! :values [{:text "B"} {:text "C"}])))
     (is (= [{:text "D"} {:text "E"}]
            (db/insert! :fixtures :values [{:text "D"} {:text "E"}] :returning [:text])))))
+
+(deftest update-test
+  (db/set-db! db1)
+  (db/delete! :fixtures)
+  (db/insert! :fixtures :values [{:text "A"} {:text "B"}])
+
+  (testing "returning row count"
+    (testing "without a :set clause"
+      (is (= 2 (db/update! :fixtures)))
+      (is (= 2 (db/row-count :fixtures))))
+
+    (testing "with a :set clause"
+      (is (= 2 (db/update! :fixtures :set {:bigint 1})))
+      (is (= 2 (db/row-count :fixtures :where [:= :bigint 1]))))
+
+    (testing "with a :where clause"
+      (is (= 1 (db/update! :fixtures :set {:bigint 99} :where [:= "A" :text])))
+      (is (= 1 (db/row-count :fixtures :where [:= :bigint 99])))))
+
+  (testing "returning rows (when :returning clause included)"
+    (is (int? (-> (db/update! :fixtures :returning [:id]) first :id)))
+    (is (= [{:bigint 5}]
+           (db/update! :fixtures
+                       :set {:bigint 5}
+                       :where [:= "A" :text]
+                       :returning [:bigint])))))
 
 (deftest queries-test
   (db/set-db! db1)
@@ -142,12 +168,6 @@
   (testing "count"
     (is (= 2 (db/row-count :fixtures)))
     (is (= 1 (db/row-count :fixtures :where [:= 1 :id]))))
-
-  (testing "update!"
-    (is (= 1 (db/update! :fixtures :set {:text "HIJ"} :where [:= 1 :id])))
-    (is (db/exists? :fixtures :where [:and
-                                      [:= 1 :id]
-                                      [:= "HIJ" :text]])))
 
   (testing "delete!"
     (is (= 1 (db/delete! :fixtures :where [:= 1 :id])))
