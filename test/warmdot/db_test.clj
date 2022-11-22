@@ -44,8 +44,8 @@
   [f]
   (create-schema db1)
   (create-schema db2)
-  (db/with-db (postgres/connection {:dbname "db_test"})
-    (f)))
+  (db/set-db! db1)
+  (f))
 
 (use-fixtures :once connect-to-database)
 
@@ -97,6 +97,32 @@
            (db/insert! :fixtures :values [{:text "D"} {:text "E"}] :returning [:text])))))
 
 (deftest update-test
+  (db/set-db! db1)
+  (db/delete! :fixtures)
+  (db/insert! :fixtures :values [{:text "A"} {:text "B"}])
+
+  (testing "returning row count"
+    (testing "without a :set clause"
+      (is (= 2 (db/update! :fixtures)))
+      (is (= 2 (db/row-count :fixtures))))
+
+    (testing "with a :set clause"
+      (is (= 2 (db/update! :fixtures :set {:bigint 1})))
+      (is (= 2 (db/row-count :fixtures :where [:= :bigint 1]))))
+
+    (testing "with a :where clause"
+      (is (= 1 (db/update! :fixtures :set {:bigint 99} :where [:= "A" :text])))
+      (is (= 1 (db/row-count :fixtures :where [:= :bigint 99])))))
+
+  (testing "returning rows (when :returning clause included)"
+    (is (int? (-> (db/update! :fixtures :returning [:id]) first :id)))
+    (is (= [{:bigint 5}]
+           (db/update! :fixtures
+                       :set {:bigint 5}
+                       :where [:= "A" :text]
+                       :returning [:bigint])))))
+
+(deftest delete-test
   (db/set-db! db1)
   (db/delete! :fixtures)
   (db/insert! :fixtures :values [{:text "A"} {:text "B"}])
@@ -354,29 +380,49 @@
       (db/update! :fixtures :set {:varchar "YES"}))
     (is (= ["JKL" "YES"] (db/pluck-first! :fixtures [:text :varchar])))))
 
-(deftest set-db!-test
+(deftest set-database-test
+  (db/set-db! nil)
   (db/delete! :fixtures ::db/db db1)
   (db/delete! :fixtures ::db/db db2)
 
-  (db/with-db db1 (db/insert! :fixtures))
+  (db/with-db db1 (db/insert! :fixtures :values [{:text "db1"}]))
+  (db/with-db db2 (db/insert! :fixtures :values [{:text "db2"}]))
 
   (testing "::db option"
-    (is (= 1 (db/row-count :fixtures ::db/db db1)))
-    (is (= 0 (db/row-count :fixtures ::db/db db2))))
-  
+    (is (= "db1" (db/pluck-first! :fixtures :text ::db/db db1)))
+    (is (= "db2" (db/pluck-first! :fixtures :text ::db/db db2))))
+
   (testing "with-db"
-    (db/with-db db1 (is (= 1 (db/row-count :fixtures))))
-    (db/with-db db2 (is (= 0 (db/row-count :fixtures))))
-    
+    (db/with-db db1 (is (= "db1" (db/pluck-first! :fixtures :text))))
+    (db/with-db db2 (is (= "db2" (db/pluck-first! :fixtures :text))))
+
     (testing "nested calls"
-      (db/with-db db1 
-        (is (= 1 (db/row-count :fixtures)))
-        (db/with-db db2 
-          (is (= 0 (db/row-count :fixtures))))
-        (is (= 1 (db/row-count :fixtures))))))
-  
+      (db/with-db db1
+        (is (= "db1" (db/pluck-first! :fixtures :text)))
+        (db/with-db db2
+          (is (= "db2" (db/pluck-first! :fixtures :text))))
+        (is (= "db1" (db/pluck-first! :fixtures :text))))))
+
   (testing "set-db!"
     (db/set-db! db1)
-    (is (= 1 (db/row-count :fixtures)))
+    (is (= db1 (db/find-db)))
+    (is (= "db1" (db/pluck-first! :fixtures :text)))
+
     (db/set-db! db2)
-    (is (= 1 (db/row-count :fixtures)))))
+    (is (= db2 (db/find-db)))
+    (is (= "db2" (db/pluck-first! :fixtures :text)))
+    (testing "within with-db"
+      (db/set-db! db1)
+      (is (= db1 (db/find-db)))
+      (db/with-db db2
+        (is (= db2 (db/find-db)))
+        (db/set-db! db1)
+        (is (= db1 (db/find-db)))
+        (db/set-db! db2)
+        (is (= db2 (db/find-db))))
+      (is (= db1 (db/find-db)))))
+  
+  (testing "via dataset"
+    (db/set-db! nil)
+    (is (= "db1" (db/pluck-first! [db1 :fixtures] :text)))
+    (is (= "db2" (db/pluck-first! [db2 :fixtures] :text)))))

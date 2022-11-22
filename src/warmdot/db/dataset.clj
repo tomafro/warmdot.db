@@ -43,6 +43,23 @@
     [table {:as options}]
     (merge-queries {:delete-from table} options))
 
+  clojure.lang.APersistentVector
+  (select
+   [[db dataset] {:as options}]
+   (select dataset options))
+  
+  (insert
+    [[db dataset] {:as options}]
+    (insert dataset options))
+  
+  (update
+   [[db dataset] {:as options}]
+   (update dataset options))
+  
+  (delete
+   [[db dataset] {:as options}]
+   (delete dataset options))
+
   clojure.lang.APersistentMap
   (select
     [dataset {:as options}]

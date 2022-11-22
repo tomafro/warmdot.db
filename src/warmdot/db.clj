@@ -12,7 +12,9 @@
 
 (defn set-db!
   [db]
-  (alter-var-root #'*current-db* (constantly db)))
+  (if (and *current-db* (thread-bound? #'*current-db*))
+    (set! *current-db* db)
+    (alter-var-root #'*current-db* (constantly db))))
 
 (defn- throw-no-db
   []
@@ -29,16 +31,32 @@
   (fn [dataset & args] (or (apply f dataset args)
                            (throw-record-not-found dataset args))))
 
-(defn find-db!
-  ([] (find-db! nil))
-  ([query]
-   (or (and (map? query) (get query ::db))
-       *current-db*
-       (throw-no-db))))
+(defprotocol GetDb
+  (get-db* [this]))
+
+(extend-protocol GetDb
+  clojure.lang.APersistentMap
+  (get-db* [this]
+    (get this ::db))
+  
+  clojure.lang.APersistentVector
+  (get-db* [[db _dataset]]
+    db))
+
+(defn get-db
+  [source]
+  (and (satisfies? GetDb source)
+       (get-db* source)))
+
+(defn find-db
+  [& sources]
+  (or (some get-db sources)
+      *current-db*
+      (throw-no-db)))
 
 (defn- execute-query!
-  [f query]
-  (let [connection (find-db! query)
+  [f dataset query]
+  (let [connection (find-db query dataset)
         query (if (map? query) (dissoc query ::db) query)
         formatted-query (if (string? query)
                           [query]
@@ -50,22 +68,24 @@
 
 (defmacro with-transaction
   [& body]
-  `(jdbc/transact (find-db!)
+  `(jdbc/transact (find-db)
                   (^{:once true} fn* [database#]
                                      (with-db database#
                                        ~@body))))
 
 (defn rollback!
   []
-  (.rollback (find-db!)))
+  (.rollback (find-db)))
 
 (defn execute!
-  [query]
-  (execute-query! jdbc/execute! query))
+  ([query] (execute! nil query))
+  ([dataset query]
+   (execute-query! jdbc/execute! dataset query)))
 
 (defn execute-one!
-  [query]
-  (execute-query! jdbc/execute-one! query))
+  ([query] (execute-one! nil query))
+  ([dataset query]
+   (execute-query! jdbc/execute-one! dataset query)))
 
 (defn- update-count-or-result
   [result]
@@ -74,17 +94,17 @@
 
 (defn find-all
   [dataset & {:as options}]
-  (execute! (dataset/select dataset options)))
+  (execute! dataset (dataset/select dataset options)))
 
 (defn find-first
   [dataset & {:as options}]
-  (execute-one! (dataset/select-one dataset options)))
+  (execute-one! dataset (dataset/select-one dataset options)))
 
 (def find-first! (wrap-not-found find-first))
 
 (defn by-id
   [dataset id & {:as options}]
-  (execute-one! (dataset/merge-queries (dataset/select-one dataset options) {:where [:= :id id]})))
+  (execute-one! dataset (dataset/merge-queries (dataset/select-one dataset options) {:where [:= :id id]})))
 
 (def by-id!
   (wrap-not-found by-id))
@@ -92,7 +112,7 @@
 (defn pluck-all
   [dataset columns & {:as options}]
   (if (coll? columns)
-    (map vals (execute! (dataset/select dataset (assoc options :select columns))))
+    (map vals (execute! dataset (dataset/select dataset (assoc options :select columns))))
     (map first (pluck-all dataset [columns] options))))
 
 (defn pluck-first
@@ -107,19 +127,19 @@
 
 (defn insert!
   [dataset & {:as options}]
-  (update-count-or-result (execute! (dataset/insert dataset options))))
+  (update-count-or-result (execute! dataset (dataset/insert dataset options))))
 
 (defn update!
   [dataset & {:as options}]
-  (update-count-or-result (execute! (dataset/update dataset options))))
+  (update-count-or-result (execute! dataset (dataset/update dataset options))))
 
 (defn delete!
   [dataset & {:as options}]
-  (update-count-or-result (execute! (dataset/delete dataset options))))
+  (update-count-or-result (execute! dataset (dataset/delete dataset options))))
 
 (defn exists?
   [dataset & {:as options}]
-  (boolean (seq (execute-one! {:select [true] :where [:exists (dataset/select dataset options)]}))))
+  (boolean (seq (execute-one! dataset {:select [true] :where [:exists (dataset/select dataset options)]}))))
 
 (defn row-count
   [dataset & {:as options}]
