@@ -1,0 +1,1 @@
+{:hooks {:analyze-call {warmdot.db/define-dataset-functions warmdot.db.clj-kondo/define-dataset-functions}}}
