@@ -145,6 +145,11 @@
   [dataset & {:as options}]
   (pluck-first dataset :%count.* options))
 
+(defn columns
+  [table]
+  (find-all :information_schema.columns {:select [:column_name :data_type :udt_name :is_nullable :column_default]
+                                         :where [:= :table_name (name table)]}))
+
 (defn- dataset-function-def
   [dataset function]
   `(def ~(-> function name symbol) (partial ~function ~dataset)))
