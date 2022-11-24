@@ -149,18 +149,21 @@
   [dataset function]
   `(def ~(-> function name symbol) (partial ~function ~dataset)))
 
+(def query-functions
+  [`find-all
+   `find-first
+   `find-first!
+   `by-id
+   `by-id!
+   `pluck-all
+   `pluck-first
+   `pluck-first!
+   `insert!
+   `update!
+   `delete!
+   `exists?
+   `row-count])
+
 (defmacro define-dataset-functions
   [dataset]
-  `(do ~@(map #(dataset-function-def dataset %) [`find-all
-                                                 `find-first
-                                                 `find-first!
-                                                 `by-id
-                                                 `by-id!
-                                                 `pluck-all
-                                                 `pluck-first
-                                                 `pluck-first!
-                                                 `insert!
-                                                 `update!
-                                                 `delete!
-                                                 `exists?
-                                                 `row-count])))
+  `(do ~@(map #(dataset-function-def dataset %) query-functions)))
