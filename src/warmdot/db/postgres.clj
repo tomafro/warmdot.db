@@ -1,6 +1,7 @@
 (ns warmdot.db.postgres
   (:require [jsonista.core :as json]
             [next.jdbc :as jdbc]
+            [next.jdbc.connection :as connection]
             [next.jdbc.prepare :as prepare]
             [next.jdbc.result-set :as result-set]
             [next.jdbc.date-time])
@@ -65,9 +66,21 @@
   (read-column-by-label [^Array v _]    (vec (.getArray v)))
   (read-column-by-index [^Array v _ _]  (vec (.getArray v))))
 
+(def connection-parameters
+  {:stringtype "unspecified"})
+
 (defn connection
   [db]
-  (-> (jdbc/get-datasource (assoc db :dbtype "postgres" :stringtype "unspecified"))
+  (-> (jdbc/get-datasource (merge db {:dbtype "postgres"} connection-parameters))
       (jdbc/with-options {:builder-fn (result-set/as-maps-adapter
                                        result-set/as-unqualified-lower-maps
                                        column-reader)})))
+
+(defn pool
+  [db]
+  (->  (connection/->pool com.zaxxer.hikari.HikariDataSource
+                          (merge db {:dbtype "postgres"
+                                     :dataSourceProperties connection-parameters}))
+       (jdbc/with-options {:builder-fn (result-set/as-maps-adapter
+                                        result-set/as-unqualified-lower-maps
+                                        column-reader)})))

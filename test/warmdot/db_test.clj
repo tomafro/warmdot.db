@@ -7,8 +7,8 @@
             [cljc.java-time.offset-time :as offset-time]
             [tick.core :as t]))
 
-(def db1 (postgres/connection {:dbname "db_test"}))
-(def db2 (postgres/connection {:dbname "db_test2"}))
+(def db1 (warmdot.db.postgres/pool {:dbname "db_test"})) #_(postgres/connection {:dbname "db_test"})
+(def db2 (warmdot.db.postgres/pool {:dbname "db_test2"})) #_(postgres/connection {:dbname "db_test2"})
 
 (defn create-schema
   [db]

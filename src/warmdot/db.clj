@@ -150,6 +150,10 @@
   (find-all :information_schema.columns {:select [:column_name :data_type :udt_name :is_nullable :column_default]
                                          :where [:= :table_name (name table)]}))
 
+(defn backend-pid
+  [] 
+  (:pid (warmdot.db/execute-one! "select pg_backend_pid() pid")))
+
 (defn- dataset-function-def
   [dataset function]
   `(def ~(-> function name symbol) (partial ~function ~dataset)))
