@@ -82,7 +82,7 @@
     (is (= 1 (db/insert! :fixtures)))
     (is (= 1 (db/insert! :fixtures :values [{:text "A"}])))
     (is (= 2 (db/insert! :fixtures :values [{:text "B"} {:text "C"}]))))
-  
+
   (testing "returning rows (when :returning clause included)"
     (is (int? (-> (db/insert! :fixtures :returning [:id]) first :id)))
     (is (= [{:text "A"}]
@@ -192,7 +192,7 @@
     (is (db/exists? :fixtures))
     (is (not (db/exists? :fixtures :where [:= true false]))))
 
-  (testing "count"
+  (testing "row-count"
     (is (= 2 (db/row-count :fixtures)))
     (is (= 1 (db/row-count :fixtures :where [:= 1 :id]))))
 
@@ -242,7 +242,7 @@
     (is (fixtures/exists?))
     (is (not (fixtures/exists? :where [:= true false]))))
 
-  (testing "count"
+  (testing "row-count"
     (is (= 2 (fixtures/row-count)))
     (is (= 1 (fixtures/row-count :where [:= 1 :id]))))
 
@@ -293,13 +293,13 @@
       (is (= 9223372036854775807 (db/pluck-first! row :bigint)))
       (db/update! row :set {:bigint -9223372036854775808})
       (is (= -9223372036854775808 (db/pluck-first! row :bigint))))
-    
+
     (testing "real"
       (db/update! row :set {:real Float/MAX_VALUE})
       (is (= Float/MAX_VALUE (db/pluck-first! row :real)))
       (db/update! row :set {:real Float/MIN_VALUE})
       (is (= Float/MIN_VALUE (db/pluck-first! row :real))))
-    
+
     (testing "double"
       (db/update! row :set {:double Double/MAX_VALUE})
       (is (= Double/MAX_VALUE (db/pluck-first! row :double)))
@@ -352,7 +352,7 @@
       (is (= (parse-uuid "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11") (db/pluck-first! row :uuid)))
       (db/update! row :set {:uuid "f81d4fae-7dec-11d0-a765-00a0c91e6bf6"})
       (is (= "f81d4fae-7dec-11d0-a765-00a0c91e6bf6" (str (db/pluck-first! row :uuid)))))
-    
+
     (testing "smallint[]"
       (db/update! row :set {:smallint_array (into-array Long [1 2 3 4 5])})
       (is (= [1 2 3 4 5] (db/pluck-first! row :smallint_array)))
@@ -407,41 +407,42 @@
   (db/with-db db1 (db/insert! :fixtures :values [{:text "db1"}]))
   (db/with-db db2 (db/insert! :fixtures :values [{:text "db2"}]))
 
-  (testing "::db option"
-    (is (= "db1" (db/pluck-first! :fixtures :text ::db/db db1)))
-    (is (= "db2" (db/pluck-first! :fixtures :text ::db/db db2))))
+  (testing "database can be set"
+    (testing "by passing a :warmdot.db/db option"
+      (is (= "db1" (db/pluck-first! :fixtures :text ::db/db db1)))
+      (is (= "db2" (db/pluck-first! :fixtures :text ::db/db db2))))
 
-  (testing "with-db"
-    (db/with-db db1 (is (= "db1" (db/pluck-first! :fixtures :text))))
-    (db/with-db db2 (is (= "db2" (db/pluck-first! :fixtures :text))))
+    (testing "by wrapping calls using the `with-db` macro"
+      (is (= "db1" (db/with-db db1 (db/pluck-first! :fixtures :text))))
+      (is (= "db2" (db/with-db db2 (db/pluck-first! :fixtures :text))))
 
-    (testing "nested calls"
-      (db/with-db db1
-        (is (= "db1" (db/pluck-first! :fixtures :text)))
-        (db/with-db db2
-          (is (= "db2" (db/pluck-first! :fixtures :text))))
-        (is (= "db1" (db/pluck-first! :fixtures :text))))))
+      (testing "nested calls"
+        (db/with-db db1
+          (is (= "db1" (db/pluck-first! :fixtures :text)))
+          (db/with-db db2
+            (is (= "db2" (db/pluck-first! :fixtures :text))))
+          (is (= "db1" (db/pluck-first! :fixtures :text))))))
 
-  (testing "set-db!"
-    (db/set-db! db1)
-    (is (= db1 (db/find-db)))
-    (is (= "db1" (db/pluck-first! :fixtures :text)))
-
-    (db/set-db! db2)
-    (is (= db2 (db/find-db)))
-    (is (= "db2" (db/pluck-first! :fixtures :text)))
-    (testing "within with-db"
+    (testing "by calling set-db!"
       (db/set-db! db1)
-      (is (= db1 (db/find-db)))
-      (db/with-db db2
-        (is (= db2 (db/find-db)))
+      (is (= db1 (db/find-db!)))
+      (is (= "db1" (db/pluck-first! :fixtures :text)))
+
+      (db/set-db! db2)
+      (is (= db2 (db/find-db!)))
+      (is (= "db2" (db/pluck-first! :fixtures :text)))
+      (testing "within with-db"
         (db/set-db! db1)
-        (is (= db1 (db/find-db)))
-        (db/set-db! db2)
-        (is (= db2 (db/find-db))))
-      (is (= db1 (db/find-db)))))
-  
-  (testing "via dataset"
-    (db/set-db! nil)
-    (is (= "db1" (db/pluck-first! [db1 :fixtures] :text)))
-    (is (= "db2" (db/pluck-first! [db2 :fixtures] :text)))))
+        (is (= db1 (db/find-db!)))
+        (db/with-db db2
+          (is (= db2 (db/find-db!)))
+          (db/set-db! db1)
+          (is (= db1 (db/find-db!)))
+          (db/set-db! db2)
+          (is (= db2 (db/find-db!))))
+        (is (= db1 (db/find-db!)))))
+
+    (testing "by passing a vector of database and dataset"
+      (db/set-db! nil)
+      (is (= "db1" (db/pluck-first! [db1 :fixtures] :text)))
+      (is (= "db2" (db/pluck-first! [db2 :fixtures] :text))))))
