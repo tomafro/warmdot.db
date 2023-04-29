@@ -1,7 +1,8 @@
 (ns warmdot.db
   (:require [honey.sql :as sql]
-            [next.jdbc :as jdbc]
-            [warmdot.db.dataset :as dataset]))
+            [warmdot.db.connection :as connection]
+            [warmdot.db.dataset :as dataset]
+            [warmdot.db :as db]))
 
 (def ^:dynamic *current-db* nil)
 
@@ -72,28 +73,51 @@
 
 (defmacro with-transaction
   [& body]
-  `(jdbc/transact (find-db!)
-                  (^{:once true} fn* [database#]
-                                     (with-db database#
-                                       ~@body))))
+  `(let [db# (find-db!)]
+     (connection/with-transaction
+       db#
+       (^{:once true} fn* [database#]
+                          (with-db database#
+                            ~@body)))))
 
-(defn rollback!
+(defn rollback-transaction!
   []
-  (.rollback (find-db!)))
+  (connection/rollback-transaction! (find-db!)))
+
+(defn rollback-to-savepoint!
+  ([] (rollback-to-savepoint! nil))
+  ([savepoint-name]
+   (connection/rollback-to-savepoint! (find-db!) savepoint-name)))
+
+(defmacro with-named-savepoint
+  [savepoint-name & body]
+  `(with-transaction
+     (connection/with-named-savepoint
+       (find-db!)
+       ~savepoint-name
+       (^{:once true} fn* [database#]
+                          (with-db database#
+                            ~@body)))))
+
+(defmacro with-savepoint
+  [& body]
+  `(let [savepoint-name# (str (gensym "savepoint"))]
+     (with-named-savepoint savepoint-name#
+       ~@body)))
 
 (defn execute!
   ([query] (execute! nil query))
   ([dataset query]
-   (execute-query! jdbc/execute! dataset query)))
+   (execute-query! connection/execute! dataset query)))
 
 (defn execute-one!
   ([query] (execute-one! nil query))
   ([dataset query]
-   (execute-query! jdbc/execute-one! dataset query)))
+   (execute-query! connection/execute-one! dataset query)))
 
 (defn- update-count-or-result
   [result]
-  (or (-> result first ::jdbc/update-count)
+  (or (-> result first :next.jdbc/update-count)
       result))
 
 (defn find-all

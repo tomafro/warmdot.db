@@ -1,14 +1,14 @@
 (ns warmdot.db-test
   (:require [clojure.test :refer :all]
             [warmdot.db :as db]
-            [warmdot.db.postgres :as postgres]
+            [warmdot.db.connection :as connection]
             [warmdot.db.dataset :as dataset]
             [warmdot.db.test.fixtures :as fixtures]
             [cljc.java-time.offset-time :as offset-time]
             [tick.core :as t]))
 
-(def db1 (warmdot.db.postgres/pool {:dbname "db_test"})) #_(postgres/connection {:dbname "db_test"})
-(def db2 (warmdot.db.postgres/pool {:dbname "db_test2"})) #_(postgres/connection {:dbname "db_test2"})
+(def db1 (connection/postgres-pool {:dbname "db_test"})) #_(postgres/connection {:dbname "db_test"})
+(def db2 (connection/postgres-pool {:dbname "db_test2"})) #_(postgres/connection {:dbname "db_test2"})
 
 (defn create-schema
   [db]
@@ -73,6 +73,17 @@
 
 (def fixtures
   [fixture-1 fixture-2])
+
+(defn reset-fixtures!
+  ([] (reset-fixtures! {}))
+  ([& fixtures]
+   (db/delete! :fixtures)
+   (when (seq fixtures)
+     (when-let [with-values (seq (filter seq fixtures))]
+       (db/insert! :fixtures :values with-values))
+     (when-let [without-values (seq (remove seq fixtures))]
+       (doseq [_ without-values]
+         (db/insert! :fixtures))))))
 
 (deftest insert-test
   (db/set-db! db1)
@@ -373,31 +384,94 @@
 
 (deftest transactions-test
   (db/set-db! db1)
-  (db/delete! :fixtures)
-  (db/insert! :fixtures :values [fixture-1])
-  (db/insert! :fixtures :values [fixture-2])
 
   (testing "commit on completion"
+    (reset-fixtures!)
     (db/with-transaction
       (db/update! :fixtures :set {:text "JKL"})
       (db/update! :fixtures :set {:varchar "QRS"}))
     (is (= ["JKL" "QRS"] (db/pluck-first! :fixtures [:text :varchar]))))
 
   (testing "rollback on error"
+    (reset-fixtures!)
     (try
       (db/with-transaction
         (db/update! :fixtures :set {:text "MNO"})
         (db/update! :fixtures :set {:varchar "XYZ"})
         (throw (ex-info "Error!" {})))
       (catch Exception _))
-    (is (= ["JKL" "QRS"] (db/pluck-first! :fixtures [:text :varchar]))))
+    (is (= [nil nil] (db/pluck-first! :fixtures [:text :varchar]))))
 
   (testing "explicit rollback"
+    (reset-fixtures!)
     (db/with-transaction
       (db/update! :fixtures :set {:text "NO"})
-      (db/rollback!)
+      (db/rollback-transaction!)
       (db/update! :fixtures :set {:varchar "YES"}))
-    (is (= ["JKL" "YES"] (db/pluck-first! :fixtures [:text :varchar])))))
+    (is (= [nil "YES"] (db/pluck-first! :fixtures [:text :varchar])))))
+
+(deftest savepoints-test
+  (db/set-db! db1)
+
+  (testing "commit on completion"
+    (reset-fixtures!)
+    (db/with-transaction
+      (db/with-savepoint
+        (db/update! :fixtures :set {:text "MNO"})
+        (db/update! :fixtures :set {:varchar "PQR"}))
+      (db/with-savepoint
+        (db/update! :fixtures :set {:enum "north"}))
+      (db/update! :fixtures :set {:smallint 606}))
+    (is (= ["MNO" "PQR" "north" 606] (db/pluck-first! :fixtures [:text :varchar :enum :smallint]))))
+
+  (testing "rollback to start of savepoint"
+    (reset-fixtures!)
+    (db/with-transaction
+      (db/with-savepoint
+        (db/update! :fixtures :set {:text "STU"})
+        (db/update! :fixtures :set {:varchar "VWX"}))
+      (db/with-savepoint
+        (db/update! :fixtures :set {:enum "east"})
+        (db/rollback-to-savepoint!))
+      (db/update! :fixtures :set {:smallint 707}))
+    (is (= ["STU" "VWX" nil 707] (db/pluck-first! :fixtures [:text :varchar :enum :smallint]))))
+
+  (testing "nested rollbacks"
+    (reset-fixtures!)
+    (db/with-transaction
+      (db/with-savepoint
+        (db/update! :fixtures :set {:text "ABC"})
+        (db/with-savepoint
+          (db/update! :fixtures :set {:varchar "DEF"})
+          (db/rollback-to-savepoint!)))
+      (db/with-savepoint
+        (db/update! :fixtures :set {:enum "west"})
+        (db/rollback-to-savepoint!))
+      (db/update! :fixtures :set {:smallint 101}))
+    (is (= ["ABC" nil nil 101] (db/pluck-first! :fixtures [:text :varchar :enum :smallint]))))
+
+  (testing "rollback to named savepoint"
+    (reset-fixtures!)
+    (db/with-transaction
+      (db/with-named-savepoint "a"
+        (db/update! :fixtures :set {:text "XYZ"})
+        (db/with-named-savepoint "b"
+          (db/update! :fixtures :set {:varchar "ABC"})
+          (db/with-named-savepoint "c"
+            (db/update! :fixtures :set {:enum "west"})
+            (db/rollback-to-savepoint! "b"))))
+      (db/update! :fixtures :set {:smallint 202}))
+    (is (= ["XYZ" nil nil 202] (db/pluck-first! :fixtures [:text :varchar :enum :smallint]))))
+
+  (testing "implicitly opens transaction if none present"
+    (reset-fixtures!)
+    (db/with-named-savepoint "a"
+      (db/update! :fixtures :set {:text "XYZ"})
+      (db/rollback-to-savepoint!)
+      (db/with-named-savepoint "b"
+        (db/update! :fixtures :set {:varchar "ABC"})))
+    (db/update! :fixtures :set {:smallint 202})
+    (is (= [nil "ABC" nil 202] (db/pluck-first! :fixtures [:text :varchar :enum :smallint])))))
 
 (deftest set-database-test
   (db/set-db! nil)
